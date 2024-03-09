@@ -11,17 +11,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
 
 	// create an argument to enter the csv filename and don't accept any file that isn't named problems or ending with '.csv'
 	csvFileName := flag.String("csv", "problems.csv", "a csv file that stores problems in the format: 'problem:answer' ")
-
-	// must be called after all flags
-	flag.Parse()
-
 	timelimit := flag.Int("limit", 30, "the time limit for the quiz in seconds")
+
+	// must be called after all flags to parse the value
 	flag.Parse()
 
 	// using the os package, open the file by its filename and return the error based on the following conditions:
@@ -47,29 +46,45 @@ func main() {
 	// then store the main logic for the program in a function named check Answers which takes the parsed problems and
 	// returns the correctly answered ones in the form of an int named correct_answers
 	// then print how many we scored out of the length of the problems.
+
 	problems := parseLines(lines)
-	correct_answers := check_answers(problems)
-	fmt.Printf("You scored %d out of %d. \n", correct_answers, len(problems))
+	check_answers(problems, timelimit)
 }
 
-func check_answers(problems []problem) int {
+func check_answers(problems []problem, timelimit *int) {
+
+	timer := time.NewTimer(time.Duration(*timelimit) * time.Second)
 
 	// initalize a variable named correct
 	correct := 0
 
 	// for each problem in the range of problems, iterate by one and ask the user for input on what the answer may be
 	// if the answer is correct, increase the amount of correct answers, if not, do nothing.
+
 	for i, p := range problems {
 		fmt.Printf("Problem #%d: %s = ", i+1, p.q)
-		var answer string
-		fmt.Scanf("%s\n", &answer)
+		answerCh := make(chan string)
 
-		if answer == p.a {
-			correct++
+		// goroutine, similar to asynchronous method in C#, java or C++ allows concurrent methods
+		// (execution simultaneously while other methods are executed)
+		go func() {
+			var answer string
+			fmt.Scanf("%s\n", &answer)
+			answerCh <- answer
+		}()
+
+		select {
+		case <-timer.C:
+			fmt.Printf("You scored %d out of %d. \n", correct, len(problems))
+			return
+
+		case answer := <-answerCh:
+			if answer == p.a {
+				correct++
+			}
+
 		}
 	}
-
-	return correct
 }
 
 func parseLines(lines [][]string) []problem {
